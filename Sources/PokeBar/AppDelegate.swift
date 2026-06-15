@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private enum Phase {
         case patrol       // el héroe pasea por la barra
@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Oculto (pausado) sin cerrar la app.
     private var isHidden = false
     private var hideItem: NSMenuItem?
+    private var screenMenu: NSMenu?
 
     private let patrolSeconds: TimeInterval = 5
 
@@ -445,11 +446,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let restart = NSMenuItem(title: "Reiniciar combate", action: #selector(restartShow), keyEquivalent: "r")
         restart.target = self
         menu.addItem(restart)
+
+        // Submenú de pantallas, poblado al abrirse (los monitores van y vienen).
+        let screensItem = NSMenuItem(title: "Pantalla", action: nil, keyEquivalent: "")
+        let screensMenu = NSMenu()
+        screensMenu.delegate = self
+        screensItem.submenu = screensMenu
+        screenMenu = screensMenu
+        menu.addItem(screensItem)
+
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Salir", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
         return menu
+    }
+
+    /// Rellena el submenú de pantallas justo antes de mostrarse.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === screenMenu else { return }
+        menu.removeAllItems()
+        let currentID = stage?.currentScreenID
+        for screen in NSScreen.screens {
+            let item = NSMenuItem(title: screenLabel(screen),
+                                  action: #selector(selectScreen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = screen
+            if BattleStage.displayID(of: screen) == currentID { item.state = .on }
+            menu.addItem(item)
+        }
+    }
+
+    private func screenLabel(_ screen: NSScreen) -> String {
+        let name = screen.localizedName
+        return BattleStage.isBuiltIn(screen) ? "\(name) (integrada)" : name
+    }
+
+    @objc private func selectScreen(_ sender: NSMenuItem) {
+        guard let screen = sender.representedObject as? NSScreen else { return }
+        stage?.move(to: screen)
     }
 
     @objc private func toggleHidden() {
