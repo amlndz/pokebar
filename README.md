@@ -13,8 +13,12 @@ su forma final, el entrenador lo captura y saca al siguiente.
 
 <br>
 
-<a href="https://github.com/amlndz/pokebar/releases/latest/download/PokeBar.zip">
-<img src="https://img.shields.io/badge/⬇%20Descargar%20PokeBar-e3350d?style=for-the-badge&logo=apple&logoColor=white&labelColor=111" height="46" alt="Descargar PokeBar">
+```sh
+git clone https://github.com/amlndz/pokebar.git && open pokebar/PokeBar.app
+```
+
+<a href="https://github.com/amlndz/pokebar">
+<img src="https://img.shields.io/badge/git%20clone-e3350d?style=for-the-badge&logo=github&logoColor=white&labelColor=111" height="40" alt="Clonar el repo">
 </a>
 
 <br><br>
@@ -92,10 +96,17 @@ desde la pokeball de la barra.
 
 ## 📥 Instalación
 
-1. **[Descarga `PokeBar.zip`](https://github.com/amlndz/pokebar/releases/latest/download/PokeBar.zip)** y descomprímelo
-2. Arrastra `PokeBar.app` a <kbd>Aplicaciones</kbd>
-3. La primera vez: <kbd>clic derecho</kbd> → <kbd>Abrir</kbd> → <kbd>Abrir</kbd> &nbsp;<sub>(app sin notarizar)</sub>
+```sh
+git clone https://github.com/amlndz/pokebar.git
+open pokebar/PokeBar.app
+```
+
+1. Clona el repo (incluye `PokeBar.app` ya compilada — no hace falta construir nada)
+2. Abre `PokeBar.app` &nbsp;<sub>(al clonar no lleva la marca de "cuarentena" de las descargas, así que abre directa)</sub>
+3. Si aun así macOS se queja: <kbd>clic derecho</kbd> → <kbd>Abrir</kbd> → <kbd>Abrir</kbd>
 4. Busca la pokeball 🔴 en tu barra de menús — el resto va solo
+
+> 💡 ¿Prefieres tenerla en el Launchpad? Arrastra `PokeBar.app` a tu carpeta <kbd>Aplicaciones</kbd>.
 
 ---
 

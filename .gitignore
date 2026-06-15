@@ -3,10 +3,7 @@
 *.o
 *.swiftmodule
 
-# App compilada (se distribuye como Release, no en el repo)
-PokeBar.app/
-
-# Distribuible (se sube como asset del Release)
+# Distribuible antiguo (ya no se usa: la app se obtiene por git clone)
 web/PokeBar.zip
 
 # Vercel
