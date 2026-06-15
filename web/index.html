@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PokeBar — los 151 combatiendo en tu barra de menús</title>
+<meta name="description" content="Combates Pokémon en vivo en la barra de menús de tu Mac. Los 151 de la primera generación.">
+<link id="favicon" rel="icon" type="image/png" href="dex/pikachu.png">
+<style>
+  :root {
+    --red: #e3350d;
+    --yellow: #ffcb05;
+    --blue: #2a75bb;
+    --bg: #0b0b1a;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.09);
+    --text: #f2f2fa;
+    --muted: #9a9ab8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+  img.pixel { image-rendering: pixelated; }
+
+  /* Fondo animado */
+  #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .glow {
+    position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.22;
+    z-index: 0; pointer-events: none;
+  }
+  .glow.red { width: 480px; height: 480px; background: var(--red); top: -120px; left: -120px; }
+  .glow.blue { width: 520px; height: 520px; background: var(--blue); bottom: -180px; right: -140px; }
+
+  main { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+
+  /* ── Barra de menús de macOS, con notch ── */
+  .menubar {
+    position: sticky; top: 0; z-index: 50;
+    width: 100%; height: 38px;
+    background: rgba(22,22,40,0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; font-size: 13px; color: var(--text);
+    overflow: hidden;
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: clamp(140px, 22vw, 210px); height: 100%;
+    background: #000;
+    border-radius: 0 0 11px 11px;
+    z-index: 4;
+  }
+  .menubar .left, .menubar .right { display: flex; align-items: center; gap: 17px; z-index: 2; }
+  .menubar .apple { font-size: 15px; }
+  .menubar .appname { font-weight: 700; }
+  .menubar .mb-item { color: rgba(242,242,250,0.82); }
+  .menubar .right { color: rgba(242,242,250,0.85); }
+  .menubar .right svg { width: 16px; height: 16px; fill: currentColor; opacity: 0.9; }
+  .menubar .ball-mini, .inline-ball {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: linear-gradient(to bottom, var(--red) 0 42%, #111 42% 58%, #fff 58% 100%);
+    border: 1px solid #000;
+    display: inline-block; vertical-align: -2px;
+  }
+  #stage { position: absolute; inset: 0; z-index: 1; }
+  #stage img { position: absolute; bottom: 2px; image-rendering: pixelated; }
+  @media (max-width: 760px) { .menubar .mb-item { display: none; } }
+
+  /* ── Hero ── */
+  .hero { min-height: 86vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 24px 64px; }
+  .pokeball {
+    width: 110px; height: 110px; border-radius: 50%;
+    background: linear-gradient(to bottom, var(--red) 0 44%, #111 44% 56%, #fff 56% 100%);
+    border: 5px solid #111; position: relative; margin-bottom: 30px;
+    box-shadow: 0 0 60px rgba(227,53,13,0.45);
+    cursor: pointer;
+  }
+  .pokeball::after {
+    content: ""; position: absolute; width: 30px; height: 30px;
+    background: #fff; border: 7px solid #111; border-radius: 50%;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+  }
+  h1 { font-size: clamp(3rem, 9vw, 5.5rem); letter-spacing: 4px; line-height: 1; }
+  h1 .poke { color: var(--text); }
+  h1 .bar { background: linear-gradient(90deg, var(--red), var(--yellow)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tagline { color: var(--muted); margin: 22px auto 6px; max-width: 620px; line-height: 1.7; font-size: 1.05rem; }
+  .counter-line { font-size: 1.2rem; margin: 16px 0 44px; }
+  .counter-line strong { color: var(--yellow); font-size: 1.9rem; }
+  .hero-cta { display: flex; flex-direction: column; align-items: center; }
+  .download {
+    display: inline-flex; align-items: center; gap: 14px;
+    background: var(--red); color: #fff; text-decoration: none;
+    font-size: 1.15rem; font-weight: 700; padding: 18px 40px; border-radius: 12px;
+    transition: transform .12s, box-shadow .12s;
+    box-shadow: 0 10px 36px rgba(227,53,13,0.35);
+  }
+  .download svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .download:hover { transform: translateY(-2px); box-shadow: 0 16px 46px rgba(227,53,13,0.5); }
+  .download:active { transform: translateY(1px); }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-top: 30px; letter-spacing: 0.5px; }
+
+  /* ── Marquesina Pokédex ── */
+  .dex-section { width: 100%; padding: 64px 0; overflow: hidden; }
+  .dex-section h2 { text-align: center; font-size: 1.5rem; margin-bottom: 8px; }
+  .dex-section > p { text-align: center; color: var(--muted); margin-bottom: 32px; font-size: 0.95rem; }
+  .marquee { display: flex; gap: 28px; width: max-content; padding: 10px 0; }
+  .marquee img { height: 56px; width: auto; transition: transform .15s; }
+  .marquee img:hover { transform: scale(1.6); }
+  .marquee-wrap { mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+  .marquee-wrap + .marquee-wrap { margin-top: 18px; }
+
+  /* ── Features (2×2, sin huérfanas) ── */
+  .features {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 18px; max-width: 880px; width: calc(100% - 48px); padding: 44px 0 72px;
+  }
+  @media (max-width: 720px) { .features { grid-template-columns: 1fr; } }
+  .card {
+    position: relative; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 30px; line-height: 1.65;
+    transition: border-color .2s, transform .2s;
+  }
+  .card:hover { border-color: rgba(227,53,13,0.45); transform: translateY(-3px); }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--red), transparent 70%); opacity: 0.55;
+  }
+  .card .icon {
+    width: 54px; height: 54px; border-radius: 12px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    display: grid; place-items: center; margin-bottom: 18px;
+  }
+  .card .icon img { height: 38px; width: auto; image-rendering: pixelated; }
+  .card .icon .inline-ball { width: 26px; height: 26px; border-width: 2px; }
+  .card h3 { margin-bottom: 8px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1.5px; }
+  .card p { color: var(--muted); font-size: 0.9rem; }
+
+  /* ── Pasos ── */
+  .steps {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 40px; max-width: 720px; width: calc(100% - 48px);
+    line-height: 2.1; margin-bottom: 80px;
+  }
+  .steps h2 { margin-bottom: 14px; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1.5px; }
+  .steps ol { padding-left: 26px; color: var(--muted); }
+  .steps code { background: rgba(0,0,0,0.4); padding: 2px 9px; border-radius: 6px; color: var(--text); }
+
+  footer { color: var(--muted); font-size: 0.8rem; text-align: center; line-height: 1.9; padding-bottom: 48px; }
+  footer a { color: var(--text); }
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="glow red"></div>
+<div class="glow blue"></div>
+
+<main>
+  <!-- Barra de menús de macOS con notch y Pokémon en vivo -->
+  <div class="menubar">
+    <div class="notch"></div>
+    <div class="left">
+      <span class="apple"></span>
+      <span class="appname">PokeBar</span>
+      <span class="mb-item">Archivo</span>
+      <span class="mb-item">Edición</span>
+      <span class="mb-item">Ver</span>
+      <span class="mb-item">Ventana</span>
+      <span class="mb-item">Ayuda</span>
+    </div>
+    <div id="stage"></div>
+    <div class="right">
+      <svg viewBox="0 0 24 24"><path d="M12 18.5a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4zm0-5.2c-2 0-3.8.8-5.1 2.1l1.8 1.8a4.6 4.6 0 0 1 6.6 0l1.8-1.8a7.2 7.2 0 0 0-5.1-2.1zm0-5.1c-3.4 0-6.5 1.4-8.7 3.6l1.8 1.8A9.6 9.6 0 0 1 12 10.8c2.7 0 5.1 1.1 6.9 2.8l1.8-1.8A12.2 12.2 0 0 0 12 8.2z"/></svg>
+      <svg viewBox="0 0 28 14"><rect x="1" y="1" width="22" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="3" width="14" height="8" rx="1.4"/><path d="M25 5v4c1.2-.3 2-1 2-2s-.8-1.7-2-2z"/></svg>
+      <div class="ball-mini"></div>
+      <span id="clock"></span>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="pokeball" id="ball" title="¡Tócame!"></div>
+    <h1><span class="poke">Poke</span><span class="bar">Bar</span></h1>
+    <p class="tagline">
+      Combates Pokémon <strong>en vivo</strong> en la barra de menús de tu Mac.
+      Tu Pokémon pasea, lucha contra rivales aleatorios, evoluciona… y cuando
+      alcanza su forma final, el entrenador lo captura y saca al siguiente.
+    </p>
+    <p class="counter-line">Con <strong id="counter">0</strong> Pokémon, hasta Blanco y Negro</p>
+    <div class="hero-cta">
+      <a class="download" id="download" href="PokeBar.zip" download>
+        <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg>
+        Descargar PokeBar
+      </a>
+      <p class="meta">macOS 13+ · Apple Silicon · gratis · 7 MB</p>
+    </div>
+  </section>
+
+  <!-- Pokédex -->
+  <section class="dex-section">
+    <h2>Las cinco primeras generaciones</h2>
+    <p>De Kanto a Teselia — cualquiera puede ser tu Pokémon o tu rival</p>
+    <div class="marquee-wrap"><div class="marquee" id="marquee-a"></div></div>
+    <div class="marquee-wrap"><div class="marquee" id="marquee-b"></div></div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="card">
+      <div class="icon"><img class="pixel" src="dex/charizard.png" alt=""></div>
+      <h3>634 Pokémon</h3>
+      <p>Cinco generaciones completas. Tu héroe puede ser cualquiera, tenga evoluciones por delante o no.</p>
+    </div>
+    <div class="card">
+      <div class="icon"><img class="pixel" src="dex/machamp.png" alt=""></div>
+      <h3>Combates aleatorios</h3>
+      <p>Cada rival entra por un lado distinto y el duelo se coloca solo: nunca bajo el notch, nunca en las esquinas.</p>
+    </div>
+    <div class="card">
+      <div class="icon"><span class="inline-ball"></span></div>
+      <h3>Despedida y captura</h3>
+      <p>Antes de volver a la pokeball, tu Pokémon salta, gruñe o se echa a dormir. Luego el entrenador lo captura y saca a otro.</p>
+    </div>
+    <div class="card">
+      <div class="icon"><img class="pixel" src="dex/gastly.png" alt=""></div>
+      <h3>Ligera y discreta</h3>
+      <p>Sin Dock ni ventanas. Los clics atraviesan a los Pokémon. Ocúltala o reiníciala desde la pokeball de la barra.</p>
+    </div>
+  </section>
+
+  <!-- Instalación -->
+  <section class="steps">
+    <h2>Instalación</h2>
+    <ol>
+      <li>Descarga y descomprime <code>PokeBar.zip</code></li>
+      <li>Arrastra <code>PokeBar.app</code> a <code>Aplicaciones</code></li>
+      <li>La primera vez: <strong>clic derecho → Abrir → Abrir</strong> (app sin notarizar)</li>
+      <li>Busca la pokeball <span class="inline-ball"></span> en tu barra de menús — el resto va solo</li>
+    </ol>
+  </section>
+
+  <footer>
+    Sprites por <a href="https://sprites.pmdcollab.org">PMD Sprite Collab</a> ·
+    Pokémon © Nintendo / Game Freak · Proyecto fan sin ánimo de lucro
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script>
+gsap.registerPlugin(ScrollTrigger);
+
+/* ── Lista de especies (alimenta las marquesinas) ── */
+let DEX = ["bulbasaur","ivysaur","venusaur","charmander","charmeleon","charizard","squirtle","wartortle","blastoise","caterpie","metapod","butterfree","weedle","kakuna","beedrill","pidgey","pidgeotto","pidgeot","rattata","raticate","spearow","fearow","ekans","arbok","pikachu","raichu","sandshrew","sandslash","nidoranf","nidorina","nidoqueen","nidoranm","nidorino","nidoking","clefairy","clefable","vulpix","ninetales","jigglypuff","wigglytuff","zubat","golbat","oddish","gloom","vileplume","paras","parasect","venonat","venomoth","diglett","dugtrio","meowth","persian","psyduck","golduck","mankey","primeape","growlithe","arcanine","poliwag","poliwhirl","poliwrath","abra","kadabra","alakazam","machop","machoke","machamp","bellsprout","weepinbell","victreebel","tentacool","tentacruel","geodude","graveler","golem","ponyta","rapidash","slowpoke","slowbro","magnemite","magneton","farfetchd","doduo","dodrio","seel","dewgong","grimer","muk","shellder","cloyster","gastly","haunter","gengar","onix","drowzee","hypno","krabby","kingler","voltorb","electrode","exeggcute","exeggutor","cubone","marowak","hitmonlee","hitmonchan","lickitung","koffing","weezing","rhyhorn","rhydon","chansey","tangela","kangaskhan","horsea","seadra","goldeen","seaking","staryu","starmie","mrmime","scyther","jynx","electabuzz","magmar","pinsir","tauros","magikarp","gyarados","lapras","ditto","eevee","vaporeon","jolteon","flareon","porygon","omanyte","omastar","aerodactyl","kabuto","kabutops","snorlax","articuno","zapdos","moltres","dratini","dragonair","dragonite","mewtwo","mew"];
+
+/* ── Favicon aleatorio: un Pokémon distinto en cada recarga ── */
+function setFavicon() {
+  document.getElementById("favicon").href =
+    `dex/${DEX[Math.floor(Math.random() * DEX.length)]}.png`;
+}
+
+/* ── Reloj de la barra ── */
+function tickClock() {
+  const now = new Date();
+  const dia = now.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+  const hora = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  document.getElementById("clock").textContent = `${dia}  ${hora}`;
+}
+tickClock(); setInterval(tickClock, 10000);
+
+/* ── Pokémon paseando por la barra (pasan por detrás del notch) ── */
+const WALKERS = ["charmander","pikachu","gengar","snorlax","eevee","squirtle"];
+const stage = document.getElementById("stage");
+class Walker {
+  constructor(species, x) {
+    this.s = species; this.x = x; this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.speed = 18 + Math.random() * 26; this.frame = 0; this.t = 0;
+    this.el = document.createElement("img");
+    this.el.className = "pixel"; this.el.style.height = "28px";
+    stage.appendChild(this.el);
+  }
+  step(dt, w) {
+    this.x += this.dir * this.speed * dt;
+    if (this.x < 0) { this.x = 0; this.dir = 1; }
+    if (this.x > w - 40) { this.x = w - 40; this.dir = -1; }
+    this.t += dt;
+    if (this.t > 0.14) { this.t = 0; this.frame = (this.frame + 1) % 4; }
+    this.el.src = `walkers/${this.s}-${this.frame}.png`;
+    this.el.style.left = this.x + "px";
+    this.el.style.transform = this.dir < 0 ? "scaleX(-1)" : "";
+  }
+}
+const walkers = WALKERS.map((s, i) => new Walker(s, 80 + i * 150));
+let last = performance.now();
+(function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const w = stage.clientWidth;
+  walkers.forEach(wk => wk.step(dt, w));
+  requestAnimationFrame(loop);
+})(last);
+
+/* ── Marquesinas del Pokédex ── */
+function fillMarquee(id, list) {
+  const m = document.getElementById(id);
+  [...list, ...list].forEach(s => {
+    const img = document.createElement("img");
+    img.src = `dex/${s}.png`; img.className = "pixel"; img.alt = s; img.title = s;
+    img.loading = "lazy";
+    m.appendChild(img);
+  });
+  return m;
+}
+function buildMarquees() {
+  const half = Math.ceil(DEX.length / 2);
+  const mA = fillMarquee("marquee-a", DEX.slice(0, half));
+  const mB = fillMarquee("marquee-b", DEX.slice(half));
+  gsap.to(mA, { xPercent: -50, ease: "none", duration: 150, repeat: -1 });
+  gsap.fromTo(mB, { xPercent: -50 }, { xPercent: 0, ease: "none", duration: 150, repeat: -1 });
+}
+
+// Carga la lista completa (634) y arranca; si falla, usa la incrustada.
+fetch("dex.json").then(r => r.json()).then(list => { if (list && list.length) DEX = list; })
+  .catch(() => {}).finally(() => { setFavicon(); buildMarquees(); });
+
+/* ── Animaciones del hero ── */
+gsap.from(".pokeball", { y: -300, rotation: 720, duration: 1.1, ease: "bounce.out" });
+gsap.from("h1", { scale: 0.4, opacity: 0, duration: 0.7, delay: 0.6, ease: "back.out(2)" });
+// Solo fundido (sin desplazamiento) para que nada se superponga al animar.
+gsap.from(".tagline, .counter-line, .hero-cta", {
+  opacity: 0, duration: 0.6, delay: 0.9, stagger: 0.12,
+});
+gsap.to("#counter", {
+  innerText: 634, duration: 2, delay: 1.2, snap: { innerText: 1 },
+});
+gsap.to(".pokeball", {
+  rotation: -14, duration: 0.12, repeat: 5, yoyo: true, delay: 2.5,
+  ease: "power1.inOut",
+  onComplete() { gsap.set(".pokeball", { rotation: 0 }); },
+});
+
+/* ── Reveal de las cards al hacer scroll ── */
+gsap.utils.toArray(".card").forEach((card, i) => {
+  gsap.from(card, {
+    y: 60, opacity: 0, duration: 0.6, delay: (i % 2) * 0.12,
+    scrollTrigger: { trigger: card, start: "top 88%" },
+  });
+});
+gsap.from(".steps", {
+  y: 60, opacity: 0, duration: 0.7,
+  scrollTrigger: { trigger: ".steps", start: "top 85%" },
+});
+
+/* ── Confetti ── */
+function party(x, y) {
+  confetti({ particleCount: 120, spread: 75, origin: { x, y }, colors: ["#e3350d", "#ffcb05", "#2a75bb", "#ffffff"] });
+}
+document.getElementById("download").addEventListener("click", e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  party((r.left + r.width / 2) / innerWidth, (r.top + r.height / 2) / innerHeight);
+});
+document.getElementById("ball").addEventListener("click", e => {
+  gsap.fromTo("#ball", { rotation: -16 }, { rotation: 0, duration: 0.7, ease: "elastic.out(1.3, 0.25)" });
+  const r = e.currentTarget.getBoundingClientRect();
+  party((r.left + r.width / 2) / innerWidth, (r.top + r.height / 2) / innerHeight);
+});
+
+/* ── Fondo: estrellas pixeladas ── */
+const cv = document.getElementById("bg-canvas"), ctx = cv.getContext("2d");
+let stars = [];
+function resize() {
+  cv.width = innerWidth; cv.height = innerHeight;
+  stars = Array.from({ length: 80 }, () => ({
+    x: Math.random() * cv.width, y: Math.random() * cv.height,
+    s: 2, v: 4 + Math.random() * 12, a: Math.random(),
+  }));
+}
+resize(); addEventListener("resize", resize);
+(function starLoop() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (const st of stars) {
+    st.y += st.v / 60;
+    if (st.y > cv.height) { st.y = -4; st.x = Math.random() * cv.width; }
+    ctx.globalAlpha = 0.12 + 0.3 * Math.abs(Math.sin(st.a + performance.now() / 1400));
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(st.x | 0, st.y | 0, st.s, st.s);
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(starLoop);
+})();
+</script>
+</body>
+</html>

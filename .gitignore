@@ -1,0 +1,16 @@
+# Artefactos de compilación de Swift
+.build/
+*.o
+*.swiftmodule
+
+# App compilada (se distribuye como Release, no en el repo)
+PokeBar.app/
+
+# Distribuible (se sube como asset del Release)
+web/PokeBar.zip
+
+# Vercel
+**/.vercel/
+
+# macOS
+.DS_Store
