@@ -1017,4 +1017,9 @@ enum Species: String {
         .virizion, .tornadus, .thundurus, .reshiram, .zekrom, .landorus, .kyurem, .keldeo,
         .meloetta, .genesect
     ]
+
+    static let firstStage: [Species] = {
+        let evolved = Set(next.values.flatMap { $0 })
+        return all.filter { !evolved.contains($0) }
+    }()
 }
