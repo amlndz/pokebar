@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Despedida: gestos antes de volver a la pokeball.
     private var farewellQueue: [(anim: String, frameInterval: TimeInterval, hold: TimeInterval)] = []
     private var farewellIndex = 0
+    private var heroAnimName = "walk"
+    private var heroAnimInterval: TimeInterval = 0.12
     private let gestureCatalog: [(anim: String, frameInterval: TimeInterval, hold: TimeInterval)] = [
         ("hop", 0.09, 1.3),       // salta
         ("attack", 0.08, 1.0),    // gruñe / se muestra
@@ -422,14 +424,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         trainer.setAnim(TrainerSprites.walkFrames(facingLeft: trainerFromRight), interval: 0.15)
         trainer.visible = true
         stage.place(trainer)
-        // El héroe se gira hacia el entrenador.
+        // El héroe se gira hacia el entrenador manteniendo su animación actual.
         stage.hero.facingLeft = trainerFromRight
-        setHeroAnim("walk", interval: 0.12)
+        setHeroAnim(heroAnimName, interval: heroAnimInterval)
         setPhase(.trainerEnter)
     }
 
     private func setHeroAnim(_ anim: String, interval: TimeInterval, oneShot: Bool = false) {
         guard let stage else { return }
+        if !oneShot { heroAnimName = anim; heroAnimInterval = interval }
         stage.hero.setAnim(PokeSprites.frames(heroSpecies, anim: anim, facingLeft: stage.hero.facingLeft),
                            interval: interval, oneShot: oneShot)
         stage.place(stage.hero)
