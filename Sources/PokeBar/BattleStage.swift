@@ -91,17 +91,51 @@ final class BattleStage {
         }
     }
 
+    /// Clave en UserDefaults con el ID de la pantalla elegida por el usuario.
+    private let screenDefaultsKey = "PokeBarScreenID"
+
+    /// ID (NSScreenNumber) de una pantalla.
+    static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return (screen.deviceDescription[key] as? NSNumber)?.uint32Value
+    }
+
+    /// Si es la pantalla integrada del Mac.
+    static func isBuiltIn(_ screen: NSScreen) -> Bool {
+        guard let id = displayID(of: screen) else { return false }
+        return CGDisplayIsBuiltin(id) != 0
+    }
+
     /// La pantalla integrada del Mac (no el monitor externo con foco).
     private var builtInScreen: NSScreen? {
-        NSScreen.screens.first { screen in
-            let key = NSDeviceDescriptionKey("NSScreenNumber")
-            guard let id = (screen.deviceDescription[key] as? NSNumber)?.uint32Value else { return false }
-            return CGDisplayIsBuiltin(id) != 0
+        NSScreen.screens.first { Self.isBuiltIn($0) }
+    }
+
+    /// Pantalla donde se muestra el espectáculo: la elegida por el usuario (si
+    /// sigue conectada), o la integrada por defecto.
+    private var targetScreen: NSScreen? {
+        if let saved = UserDefaults.standard.object(forKey: screenDefaultsKey) as? NSNumber,
+           let match = NSScreen.screens.first(where: { Self.displayID(of: $0) == saved.uint32Value }) {
+            return match
         }
+        return builtInScreen ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// ID de la pantalla donde se muestra ahora el espectáculo.
+    var currentScreenID: CGDirectDisplayID? {
+        targetScreen.flatMap(Self.displayID)
+    }
+
+    /// Cambia el espectáculo a la pantalla indicada y recoloca.
+    func move(to screen: NSScreen) {
+        guard let id = Self.displayID(of: screen) else { return }
+        UserDefaults.standard.set(NSNumber(value: id), forKey: screenDefaultsKey)
+        layoutForScreen()
+        window.orderFrontRegardless()
     }
 
     private func layoutForScreen() {
-        guard let screen = builtInScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let screen = targetScreen else { return }
         let barHeight = max(22, screen.frame.maxY - screen.visibleFrame.maxY)
         barFrame = NSRect(x: screen.frame.minX,
                           y: screen.frame.maxY - barHeight,
@@ -120,6 +154,9 @@ final class BattleStage {
         }
 
         window.setFrame(barFrame, display: true)
+        // Al cambiar de pantalla, que nadie quede fuera del nuevo ancho.
+        hero.centerX = min(max(hero.centerX, 0), barFrame.width)
+        foe.centerX = min(max(foe.centerX, 0), barFrame.width)
         place(hero)
         place(foe)
     }
