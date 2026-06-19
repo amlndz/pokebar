@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func restartShow() {
         guard let stage else { return }
-        setHero(Species.all.randomElement()!)
+        setHero(Species.firstStage.randomElement()!)
         stage.foe.visible = false
         stage.trainer.visible = false
         stage.ball.visible = false
@@ -244,7 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if phaseClock >= 1.8 {
                 stage.ball.visible = false
                 // Un Pokémon nuevo cualquiera, distinto del capturado.
-                setHero(Species.all.filter { $0 != heroSpecies }.randomElement()!)
+                setHero(Species.firstStage.filter { $0 != heroSpecies }.randomElement()!)
                 stage.hero.centerX = ballToX
                 stage.hero.facingLeft = trainerFromRight
                 stage.hero.visible = true
