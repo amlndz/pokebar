@@ -86,6 +86,10 @@ for dex, (name, evo_from) in meta.items():
 FILES = ["AnimData.xml"] + [f"{a}-Anim.png" for a in ANIMS]
 
 
+# Variante shiny: mismo sprite recoloreado, en el subdirectorio 0000/0001.
+SHINY_REL = "0000/0001"
+
+
 def fetch_sprites(dex: int):
     d = os.path.join(CACHE, f"{dex:04d}")
     os.makedirs(d, exist_ok=True)
@@ -93,11 +97,26 @@ def fetch_sprites(dex: int):
         path = os.path.join(d, f)
         if os.path.exists(path) and os.path.getsize(path) > 0:
             continue
+        for _ in range(3):  # reintenta: no perder una especie por un fallo transitorio
+            try:
+                open(path, "wb").write(http_get(f"{PMD}/{dex:04d}/{f}"))
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    break  # animación opcional que no existe
+            except Exception:
+                pass
+    # Hojas shiny (mismas anims, geometría idéntica a la normal).
+    sd = os.path.join(d, "shiny")
+    os.makedirs(sd, exist_ok=True)
+    for a in ANIMS:
+        path = os.path.join(sd, f"{a}-Anim.png")
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            continue
         try:
-            data = http_get(f"{PMD}/{dex:04d}/{f}")
-            open(path, "wb").write(data)
+            open(path, "wb").write(http_get(f"{PMD}/{dex:04d}/{SHINY_REL}/{a}-Anim.png"))
         except Exception:
-            pass  # animación opcional puede no existir
+            pass  # esta especie no tiene shiny: se usará la normal
     return dex
 
 
@@ -124,6 +143,31 @@ def anim_sizes(d):
     return sizes
 
 
+def slice_anim(png: str, fw: int, fh: int, name: str, out_name: str, suffix: str) -> bool:
+    """Trocea una hoja en frames `<name><suffix>-<out>-<l|r>-<i>.png`."""
+    try:
+        sheet = Image.open(png).convert("RGBA")
+    except Exception:
+        return False
+    cols = sheet.width // fw
+    rows = sheet.height // fh
+    if cols == 0:
+        return False
+    wrote = False
+    for dkey, row in ROWS.items():
+        r = row if rows >= 8 else 0
+        frames = [sheet.crop((c * fw, r * fh, (c + 1) * fw, (r + 1) * fh)) for c in range(cols)]
+        boxes = [f.getbbox() for f in frames if f.getbbox()]
+        if not boxes:
+            continue
+        x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
+        x1 = max(b[2] for b in boxes); y1 = max(b[3] for b in boxes)
+        for i, f in enumerate(frames):
+            f.crop((x0, y0, x1, y1)).save(os.path.join(OUT, f"{name}{suffix}-{out_name}-{dkey}-{i}.png"))
+        wrote = True
+    return wrote
+
+
 def slice_species(dex: int, name: str) -> bool:
     d = os.path.join(CACHE, f"{dex:04d}")
     if not os.path.exists(os.path.join(d, "AnimData.xml")):
@@ -147,32 +191,19 @@ def slice_species(dex: int, name: str) -> bool:
         pass
 
     for anim, out_name in ANIMS.items():
-        png = os.path.join(d, f"{anim}-Anim.png")
-        if anim not in sizes or not os.path.exists(png):
+        if anim not in sizes:
             continue
         fw, fh = sizes[anim]
-        try:
-            sheet = Image.open(png).convert("RGBA")
-        except Exception:
-            if anim in REQUIRED:
+        png = os.path.join(d, f"{anim}-Anim.png")
+        if os.path.exists(png):
+            if not slice_anim(png, fw, fh, name, out_name, "") and anim in REQUIRED:
                 return False
-            continue
-        cols = sheet.width // fw
-        rows = sheet.height // fh
-        if cols == 0:
-            if anim in REQUIRED:
-                return False
-            continue
-        for dkey, row in ROWS.items():
-            r = row if rows >= 8 else 0
-            frames = [sheet.crop((c * fw, r * fh, (c + 1) * fw, (r + 1) * fh)) for c in range(cols)]
-            boxes = [f.getbbox() for f in frames if f.getbbox()]
-            if not boxes:
-                continue
-            x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
-            x1 = max(b[2] for b in boxes); y1 = max(b[3] for b in boxes)
-            for i, f in enumerate(frames):
-                f.crop((x0, y0, x1, y1)).save(os.path.join(OUT, f"{name}-{out_name}-{dkey}-{i}.png"))
+        elif anim in REQUIRED:
+            return False
+        # Variante shiny (best-effort: si falta, la especie usa la normal).
+        shiny_png = os.path.join(d, "shiny", f"{anim}-Anim.png")
+        if os.path.exists(shiny_png):
+            slice_anim(shiny_png, fw, fh, name, out_name, "-shiny")
     return True
 
 
@@ -229,6 +260,12 @@ enum Species: String {{
     static let all: [Species] = [
 {chunk_all(ordered)}
     ]
+
+    /// Formas base (no son evolución de nadie): el héroe siempre empieza aquí.
+    static let firstStage: [Species] = {{
+        let evolved = Set(next.values.flatMap {{ $0 }})
+        return all.filter {{ !evolved.contains($0) }}
+    }}()
 }}
 """)
 print(f"Escrito {SWIFT} ({len(ordered)} casos, {len(next_map)} con evolución)")

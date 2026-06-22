@@ -1018,6 +1018,7 @@ enum Species: String {
         .meloetta, .genesect
     ]
 
+    /// Formas base (no son evolución de nadie): el héroe siempre empieza aquí.
     static let firstStage: [Species] = {
         let evolved = Set(next.values.flatMap { $0 })
         return all.filter { !evolved.contains($0) }

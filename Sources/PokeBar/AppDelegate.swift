@@ -59,6 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let patrolSeconds: TimeInterval = 5
 
+    /// 1 entre tantas: probabilidad de que un Pokémon salga shiny.
+    private let shinyOdds = 72
+    private func rollShiny() -> Bool { Int.random(in: 0..<shinyOdds) == 0 }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = PokeSprites.pokeballIcon()
@@ -105,7 +109,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stage.hero.view.alphaValue = 1
         stage.hero.visible = true
         stage.hero.facingLeft = false
+        stage.hero.shiny = rollShiny()
         setHeroAnim("walk", interval: 0.12)
+        stage.hero.emitSparkle()
         setPhase(.patrol)
     }
 
@@ -123,22 +129,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         case .approach:
             let foeTarget = battleHeroX + (foeOnRight ? battleGap : -battleGap)
-            let foeReady = approach(stage.foe, frames: walkFrames(foeSpecies),
+            let foeReady = approach(stage.foe, frames: walkFrames(foeSpecies, shiny: stage.foe.shiny),
                                     toward: foeTarget, speed: 65, dt: dt)
             var heroReady = false
+            let heroWalk = walkFrames(heroSpecies, shiny: stage.hero.shiny)
             if !heroAtPost {
-                heroAtPost = approach(stage.hero, frames: walkFrames(heroSpecies),
+                heroAtPost = approach(stage.hero, frames: heroWalk,
                                       toward: battleHeroX, speed: 32, dt: dt)
             } else if !foeReady {
                 // No espera quieto: avanza hacia el rival y retrocede.
                 let dir: CGFloat = foeOnRight ? 1 : -1
                 let target = battleHeroX + (paceForward ? 16 * stage.scale * dir : 0)
-                if approach(stage.hero, frames: walkFrames(heroSpecies),
+                if approach(stage.hero, frames: heroWalk,
                             toward: target, speed: 30, dt: dt) {
                     paceForward.toggle()
                 }
             } else {
-                heroReady = approach(stage.hero, frames: walkFrames(heroSpecies),
+                heroReady = approach(stage.hero, frames: heroWalk,
                                      toward: battleHeroX, speed: 45, dt: dt)
             }
             if heroAtPost, heroReady, foeReady {
@@ -195,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 stage.hero.view.alphaValue = 1
                 if let evo = pendingEvolution { setHero(evo) }
                 setHeroAnim("walk", interval: 0.12)
+                stage.hero.emitSparkle()
                 setPhase(.patrol)
             }
 
@@ -248,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 setHero(Species.firstStage.filter { $0 != heroSpecies }.randomElement()!)
                 stage.hero.centerX = ballToX
                 stage.hero.facingLeft = trainerFromRight
+                stage.hero.shiny = rollShiny()
                 stage.hero.visible = true
                 setHeroAnim("walk", interval: 0.12)
                 setPhase(.swapNew)
@@ -258,6 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             stage.hero.view.alphaValue = Int(phaseClock / 0.12) % 2 == 0 ? 0.25 : 1
             if phaseClock >= 0.9 {
                 stage.hero.view.alphaValue = 1
+                stage.hero.emitSparkle()
                 stage.trainer.setAnim(TrainerSprites.walkFrames(facingLeft: trainerFromRight), interval: 0.15)
                 setPhase(.trainerExit)
             }
@@ -276,8 +286,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Acciones de fase
 
-    private func walkFrames(_ species: Species) -> (Bool) -> [NSImage] {
-        { facingLeft in PokeSprites.frames(species, anim: "walk", facingLeft: facingLeft) }
+    private func walkFrames(_ species: Species, shiny: Bool) -> (Bool) -> [NSImage] {
+        { facingLeft in PokeSprites.frames(species, anim: "walk", facingLeft: facingLeft, shiny: shiny) }
     }
 
     /// Mueve a un actor hacia su objetivo girándolo si hace falta.
@@ -360,9 +370,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let foe = stage.foe
         foe.facingLeft = foeOnRight
-        foe.setAnim(PokeSprites.frames(foeSpecies, anim: "walk", facingLeft: foeOnRight), interval: 0.12)
+        foe.shiny = rollShiny()
+        foe.setAnim(PokeSprites.frames(foeSpecies, anim: "walk", facingLeft: foeOnRight, shiny: foe.shiny), interval: 0.12)
         foe.centerX = foeOnRight ? stage.width + 20 : -20
         foe.visible = true
+        foe.emitSparkle()
         stage.place(foe)
 
         battleHeroX = battlePosition()
@@ -379,7 +391,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startFoeAttack() {
         guard let stage else { return }
         stage.foe.setAnim(PokeSprites.frames(foeSpecies, anim: "attack",
-                                             facingLeft: stage.foe.facingLeft),
+                                             facingLeft: stage.foe.facingLeft, shiny: stage.foe.shiny),
                           interval: 0.07, oneShot: true)
         stage.place(stage.foe)
         setPhase(.foeAttack)
@@ -388,7 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startFoeDown() {
         guard let stage else { return }
         stage.foe.setAnim(PokeSprites.frames(foeSpecies, anim: "hurt",
-                                             facingLeft: stage.foe.facingLeft),
+                                             facingLeft: stage.foe.facingLeft, shiny: stage.foe.shiny),
                           interval: 0.3)
         stage.place(stage.foe)
         setHeroAnim("walk", interval: 0.12)
@@ -430,7 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setHeroAnim(_ anim: String, interval: TimeInterval, oneShot: Bool = false) {
         guard let stage else { return }
-        stage.hero.setAnim(PokeSprites.frames(heroSpecies, anim: anim, facingLeft: stage.hero.facingLeft),
+        stage.hero.setAnim(PokeSprites.frames(heroSpecies, anim: anim, facingLeft: stage.hero.facingLeft, shiny: stage.hero.shiny),
                            interval: interval, oneShot: oneShot)
         stage.place(stage.hero)
     }
