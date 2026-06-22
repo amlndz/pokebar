@@ -6,9 +6,11 @@ import AppKit
 enum PokeSprites {
     private static var cache: [String: [NSImage]] = [:]
 
-    /// Carga los frames `<especie>-<anim>-<r|l>-<n>.png` del bundle.
-    static func frames(_ species: Species, anim: String, facingLeft: Bool) -> [NSImage] {
-        let key = "\(species.rawValue)-\(anim)-\(facingLeft ? "l" : "r")"
+    /// Carga los frames `<especie>[-shiny]-<anim>-<r|l>-<n>.png` del bundle.
+    /// Si se pide shiny y esa especie no tiene variante, cae a la normal.
+    static func frames(_ species: Species, anim: String, facingLeft: Bool, shiny: Bool = false) -> [NSImage] {
+        let variant = shiny ? "-shiny" : ""
+        let key = "\(species.rawValue)\(variant)-\(anim)-\(facingLeft ? "l" : "r")"
         if let cached = cache[key] { return cached }
         var result: [NSImage] = []
         var i = 0
@@ -17,8 +19,40 @@ enum PokeSprites {
             result.append(image)
             i += 1
         }
+        if result.isEmpty && shiny {
+            result = frames(species, anim: anim, facingLeft: facingLeft) // sin shiny: normal
+        }
         cache[key] = result
         return result
+    }
+
+    /// Cúmulo de estrellitas doradas que marca a un Pokémon shiny.
+    static func sparkle() -> NSImage {
+        let size = NSSize(width: 22, height: 22)
+        return NSImage(size: size, flipped: false) { rect in
+            let gold = NSColor(srgbRed: 1.0, green: 0.90, blue: 0.25, alpha: 1)
+            // (centro x, centro y, radio) de cada estrella, agrupadas arriba.
+            let stars: [(CGFloat, CGFloat, CGFloat)] = [
+                (rect.maxX - 6, rect.maxY - 6, 6),
+                (rect.maxX - 14, rect.maxY - 13, 3.5),
+                (rect.maxX - 3.5, rect.maxY - 15, 2.5),
+            ]
+            for (cx, cy, r) in stars {
+                let p = NSBezierPath()
+                let inner = r * 0.34
+                for k in 0..<8 { // estrella de 4 puntas: 8 vértices alternos
+                    let angle = CGFloat(k) * .pi / 4
+                    let rad = k % 2 == 0 ? r : inner
+                    let pt = NSPoint(x: cx + cos(angle) * rad, y: cy + sin(angle) * rad)
+                    k == 0 ? p.move(to: pt) : p.line(to: pt)
+                }
+                p.close()
+                gold.setFill(); p.fill()
+                NSColor.white.withAlphaComponent(0.9).setStroke()
+                p.lineWidth = 0.6; p.stroke()
+            }
+            return true
+        }
     }
 
     /// Pokeball para el ítem de la barra de menús, dibujada por código.

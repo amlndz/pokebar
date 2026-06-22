@@ -3,6 +3,10 @@ import AppKit
 /// Un combatiente sobre el escenario: imagen, animación y posición.
 final class Actor {
     let view = NSImageView()
+    /// Destello de estrellitas que sube y se desvanece (solo en Pokémon shiny).
+    private let star = NSImageView()
+    private var sparkleClock: TimeInterval = -1 // <0 = inactivo
+    private let sparkleDuration: TimeInterval = 1.9
     private(set) var frames: [NSImage] = []
     private var frameInterval: TimeInterval = 0.12
     private var oneShot = false
@@ -12,6 +16,8 @@ final class Actor {
     /// Elevación sobre el suelo (para la pokeball en vuelo).
     var yOffset: CGFloat = 0
     var facingLeft = false
+    /// Si es shiny: el sprite usa la paleta shiny y emite el destello al salir.
+    var shiny = false
     var visible: Bool {
         get { !view.isHidden }
         set { view.isHidden = !newValue }
@@ -22,6 +28,18 @@ final class Actor {
         view.wantsLayer = true
         view.layer?.magnificationFilter = .nearest
         view.layer?.minificationFilter = .trilinear
+        star.imageScaling = .scaleProportionallyUpOrDown
+        star.isHidden = true
+        view.addSubview(star)
+    }
+
+    /// Lanza el destello shiny: estrellitas que suben y se desvanecen.
+    /// No hace nada si el Pokémon no es shiny.
+    func emitSparkle() {
+        guard shiny else { return }
+        if star.image == nil { star.image = PokeSprites.sparkle() }
+        sparkleClock = 0
+        star.isHidden = false
     }
 
     func setAnim(_ frames: [NSImage], interval: TimeInterval, oneShot: Bool = false) {
@@ -46,6 +64,23 @@ final class Actor {
             index %= frames.count
         }
         view.image = frames[index]
+        tickSparkle(dt)
+    }
+
+    /// Anima el destello: las estrellitas suben sobre la cabeza y se desvanecen.
+    private func tickSparkle(_ dt: TimeInterval) {
+        guard sparkleClock >= 0 else { return }
+        sparkleClock += dt
+        let t = sparkleClock / sparkleDuration
+        if t >= 1 {
+            star.isHidden = true
+            sparkleClock = -1
+            return
+        }
+        // Tamaño original (ocupa el sprite entero) subiendo poco a poco.
+        let rise = view.bounds.height * CGFloat(t)
+        star.frame = NSRect(x: 0, y: rise, width: view.bounds.width, height: view.bounds.height)
+        star.alphaValue = 1 - CGFloat(t * t) // se mantiene brillante y se apaga al final
     }
 }
 
