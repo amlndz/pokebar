@@ -1018,8 +1018,25 @@ enum Species: String {
         .meloetta, .genesect
     ]
 
-    static let firstStage: [Species] = {
+    static let firstStage: [Species] = firstStage(of: all)
+
+    /// Formas base (sin pre-evolución) de un pool cualquiera.
+    static func firstStage(of pool: [Species]) -> [Species] {
         let evolved = Set(next.values.flatMap { $0 })
-        return all.filter { !evolved.contains($0) }
+        return pool.filter { !evolved.contains($0) }
+    }
+
+    /// `all` está en orden de Pokédex nacional, así que lo troceo por el primer
+    /// Pokémon de cada generación (robusto aunque falten sprites intermedios).
+    static let generations: [[Species]] = {
+        let starts: [Species] = [.bulbasaur, .chikorita, .treecko, .turtwig, .victini]
+        let bounds = starts.map { all.firstIndex(of: $0)! } + [all.count]
+        return (0..<starts.count).map { Array(all[bounds[$0]..<bounds[$0 + 1]]) }
     }()
+
+    /// Pool según las generaciones elegidas (vacío = todas).
+    static func pool(generations selected: Set<Int>) -> [Species] {
+        guard !selected.isEmpty else { return all }
+        return selected.sorted().flatMap { generations[$0 - 1] }
+    }
 }

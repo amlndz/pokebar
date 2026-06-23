@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func restartShow() {
         guard let stage else { return }
-        setHero(Species.firstStage.randomElement()!)
+        setHero(heroPool.randomElement()!)
         stage.foe.visible = false
         stage.trainer.visible = false
         stage.ball.visible = false
@@ -245,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if phaseClock >= 1.8 {
                 stage.ball.visible = false
                 // Un Pokémon nuevo cualquiera, distinto del capturado.
-                setHero(Species.firstStage.filter { $0 != heroSpecies }.randomElement()!)
+                setHero((heroPool.filter { $0 != heroSpecies }.randomElement() ?? heroPool.randomElement())!)
                 stage.hero.centerX = ballToX
                 stage.hero.facingLeft = trainerFromRight
                 stage.hero.visible = true
@@ -356,7 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startApproach() {
         guard let stage else { return }
         foeOnRight = Bool.random()
-        foeSpecies = Species.all.filter { $0 != heroSpecies }.randomElement()!
+        foeSpecies = (foePool.filter { $0 != heroSpecies }.randomElement() ?? foePool.randomElement())!
 
         let foe = stage.foe
         foe.facingLeft = foeOnRight
@@ -455,6 +455,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         screenMenu = screensMenu
         menu.addItem(screensItem)
 
+        // Submenú de generaciones (multiselección; ninguna marcada = todas).
+        let gensItem = NSMenuItem(title: "Generación", action: nil, keyEquivalent: "")
+        let gensMenu = NSMenu()
+        let selected = selectedGenerations
+        for gen in 1...Species.generations.count {
+            let item = NSMenuItem(title: "Generación \(gen)",
+                                  action: #selector(toggleGeneration(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = gen
+            item.state = selected.contains(gen) ? .on : .off
+            gensMenu.addItem(item)
+        }
+        gensItem.submenu = gensMenu
+        menu.addItem(gensItem)
+
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Salir", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -485,6 +500,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func selectScreen(_ sender: NSMenuItem) {
         guard let screen = sender.representedObject as? NSScreen else { return }
         stage?.move(to: screen)
+    }
+
+    /// Generaciones elegidas (vacío = todas). Se aplica a los siguientes Pokémon.
+    private var selectedGenerations: Set<Int> {
+        get { Set(UserDefaults.standard.array(forKey: "PokeBarGenerations") as? [Int] ?? []) }
+        set { UserDefaults.standard.set(newValue.sorted(), forKey: "PokeBarGenerations") }
+    }
+
+    /// Pool de héroes (formas base) y de rivales según las generaciones elegidas.
+    private var heroPool: [Species] { Species.firstStage(of: Species.pool(generations: selectedGenerations)) }
+    private var foePool: [Species] { Species.pool(generations: selectedGenerations) }
+
+    @objc private func toggleGeneration(_ sender: NSMenuItem) {
+        var selected = selectedGenerations
+        if selected.contains(sender.tag) { selected.remove(sender.tag) } else { selected.insert(sender.tag) }
+        selectedGenerations = selected
+        sender.state = selected.contains(sender.tag) ? .on : .off
     }
 
     @objc private func toggleHidden() {
